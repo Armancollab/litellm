@@ -1,6 +1,3 @@
-//! Real OpenRouter calls. Run with `cargo test -p litellm-inference-responses --test live -- --ignored`
-//! after exporting `OPENROUTER_API_KEY`. `OPENROUTER_LIVE_MODEL` overrides the model.
-
 use std::{sync::Arc, time::Duration};
 
 use futures_util::TryStreamExt;
@@ -8,21 +5,21 @@ use litellm_inference_responses::types::{ResponsesCall, ResponsesOutput};
 use litellm_inference_testing::RecordingSecrets;
 use litellm_llms::base_llm::responses::streaming::decode;
 use litellm_llms_types::formats::responses::streaming::ResponsesEventType;
-use rstest::rstest;
+use rstest::{fixture, rstest};
 use serde_json::json;
 
-mod support;
-use support::*;
+use crate::support::responses_route;
 
 const DEFAULT_MODEL: &str = "openrouter/openai/gpt-5.5";
 
-fn secrets() -> Arc<RecordingSecrets> {
-    let key = std::env::var("OPENROUTER_API_KEY")
-        .expect("OPENROUTER_API_KEY must be set to run the live tests");
-    Arc::new(RecordingSecrets::new([(
+/// `OPENROUTER_API_KEY` as a secret source; tests skip when it is unset.
+#[fixture]
+fn secrets() -> Option<Arc<RecordingSecrets>> {
+    let key = std::env::var("OPENROUTER_API_KEY").ok()?;
+    Some(Arc::new(RecordingSecrets::new([(
         "OPENROUTER_API_KEY",
         key.as_str(),
-    )]))
+    )])))
 }
 
 fn call(stream: bool) -> ResponsesCall {
@@ -42,10 +39,10 @@ fn call(stream: bool) -> ResponsesCall {
 }
 
 #[rstest]
-#[ignore = "needs OPENROUTER_API_KEY, see the module docs"]
 #[tokio::test]
-async fn a_complete_response_carries_output_and_usage() {
-    let output = responses_route(secrets())
+async fn a_complete_response_carries_output_and_usage(secrets: Option<Arc<RecordingSecrets>>) {
+    let Some(secrets) = secrets else { return };
+    let output = responses_route(secrets)
         .execute(call(false), &(), None)
         .await
         .unwrap();
@@ -69,10 +66,10 @@ async fn a_complete_response_carries_output_and_usage() {
 }
 
 #[rstest]
-#[ignore = "needs OPENROUTER_API_KEY, see the module docs"]
 #[tokio::test]
-async fn a_stream_ends_with_response_completed() {
-    let output = responses_route(secrets())
+async fn a_stream_ends_with_response_completed(secrets: Option<Arc<RecordingSecrets>>) {
+    let Some(secrets) = secrets else { return };
+    let output = responses_route(secrets)
         .execute(call(true), &(), None)
         .await
         .unwrap();
