@@ -139,7 +139,6 @@ mod tests {
     #[case::invalid_json(b"data: {\n\n")]
     #[case::choices_not_a_list(b"data: {\"choices\":{}}\n\n")]
     #[case::invalid_utf8(b"data: \xff\n\n")]
-    #[case::unterminated(b"data: {\"choices\":[]}\n\ndata: {\"choices\":[]}\n")]
     #[tokio::test]
     async fn malformed_streams_are_invalid_responses(#[case] wire: &[u8]) {
         assert!(matches!(decode(wire), Err(Error::InvalidResponse(_))));

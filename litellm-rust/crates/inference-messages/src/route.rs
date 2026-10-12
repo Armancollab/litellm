@@ -5,7 +5,7 @@ use litellm_host::{
     call::{HostedCompletion, HostedMachine, hosted_call},
     protocol::Protocol,
 };
-use litellm_llms_types::formats::messages::{MessagesResponse, streaming::MessagesStreamEvent};
+use litellm_llms_types::formats::messages::MessagesResponse;
 
 use super::{Error, MessagesCall};
 
@@ -61,16 +61,7 @@ impl litellm_inference::caching::Cachable for Messages {
 }
 
 impl litellm_inference::caching::StreamCachable for Messages {
-    fn stream_succeeded(wire: &[u8]) -> bool {
-        litellm_llms::base_llm::messages::streaming::decode(wire).is_ok_and(|events| {
-            events
-                .iter()
-                .any(|event| matches!(event, MessagesStreamEvent::MessageStop { .. }))
-                && !events
-                    .iter()
-                    .any(|event| matches!(event, MessagesStreamEvent::Error { .. }))
-        })
-    }
+    const TERMINAL_EVENT: &'static str = "message_stop";
 
     fn replay(data: bytes::Bytes) -> Option<litellm_host::call::OutputOf<Self>> {
         Some(litellm_host::call::CallOutput::Stream {

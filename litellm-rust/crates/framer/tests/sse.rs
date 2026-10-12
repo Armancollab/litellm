@@ -117,19 +117,11 @@ async fn eof_between_events_ends_the_stream_cleanly(
 #[case::lone_cr_line_then_eof(b"data: x\r", vec![])]
 #[case::partial_bom(b"\xEF\xBB", vec![])]
 #[tokio::test]
-async fn eof_inside_an_event_fails_after_the_terminated_events(
+async fn eof_inside_an_event_drops_it_after_the_terminated_events(
     #[case] wire: &[u8],
     #[case] expected: Vec<SseEvent>,
 ) {
-    let mut events = Box::pin(frames(input(every(wire, 1)), SseCodec::default()));
-    for expected in expected {
-        assert_eq!(events.next().await.unwrap().unwrap(), expected);
-    }
-    assert!(matches!(
-        events.next().await,
-        Some(Err(SseError::Unterminated))
-    ));
-    assert!(events.next().await.is_none());
+    assert_eq!(collect(every(wire, 1)).await.unwrap(), expected);
 }
 
 #[rstest]

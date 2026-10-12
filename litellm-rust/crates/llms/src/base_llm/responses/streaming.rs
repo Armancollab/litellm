@@ -97,9 +97,6 @@ mod tests {
     #[case::missing_type(b"data: {}\n\n")]
     #[case::numeric_type(b"data: {\"type\":3}\n\n")]
     #[case::invalid_utf8(b"data: \xff\n\n")]
-    #[case::unterminated(
-        b"data: {\"type\":\"response.created\"}\n\ndata: {\"type\":\"response.completed\"}\n"
-    )]
     #[tokio::test]
     async fn malformed_streams_are_invalid_responses(#[case] wire: &[u8]) {
         assert!(matches!(decode(wire), Err(Error::InvalidResponse(_))));

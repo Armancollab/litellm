@@ -47,22 +47,7 @@ impl Cachable for TestRoute {
 }
 
 impl StreamCachable for TestRoute {
-    fn stream_succeeded(wire: &[u8]) -> bool {
-        litellm_framer::sse::decode_all(wire).is_ok_and(|events| {
-            let kinds: Vec<Option<String>> = events
-                .iter()
-                .map(|event| {
-                    serde_json::from_str::<Value>(&event.data)
-                        .ok()
-                        .and_then(|value| value.get("type")?.as_str().map(str::to_owned))
-                })
-                .collect();
-            kinds
-                .iter()
-                .any(|kind| kind.as_deref() == Some("message_stop"))
-                && !kinds.iter().any(|kind| kind.as_deref() == Some("error"))
-        })
-    }
+    const TERMINAL_EVENT: &'static str = "message_stop";
 
     fn replay(data: Bytes) -> Option<OutputOf<Self>> {
         Some(CallOutput::Stream {

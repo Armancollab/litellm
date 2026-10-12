@@ -153,7 +153,6 @@ mod tests {
     #[case::unknown_event(b"data: {\"type\":\"future_event\"}\n\n")]
     #[case::malformed_tool(b"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":3}}\n\n")]
     #[case::utf8(b"data: \xff\n\n")]
-    #[case::unterminated(b"data: {\"type\":\"ping\"}\n\ndata: {\"type\":\"ping\"}\n")]
     #[case::done_is_not_an_anthropic_frame(b"data: [DONE]\n\n")]
     #[tokio::test]
     async fn malformed_streams_are_invalid_responses(#[case] wire: &[u8]) {

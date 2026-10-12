@@ -36,7 +36,7 @@
 
 - Each format's `src/base_llm/<format>/streaming.rs` exposes the same three names: `event_stream` (bytes to typed events), `decode` (a whole stream to typed events) and `encode` (one typed event to the SSE frame LiteLLM's proxy sends clients). Callers use the module path, never a vendor prefix
 - SSE framing, `[DONE]` and the generic helpers live in `src/base_llm/sse.rs`. Messages frames are `event:` plus `data:`; Chat Completions and Responses frames are bare `data:`, as Python's proxy writes them
-- Decoding is strict: a malformed event, a stream cut inside an event and `[DONE]` on a Messages stream are `InvalidResponse`. Python skips these silently; the divergence is deliberate
+- Decoding is strict: a malformed event and `[DONE]` on a Messages stream are `InvalidResponse`. Python skips these silently; the divergence is deliberate. A stream cut inside an event drops that event, as the SSE spec requires
 - What ends or fails a stream is a method on the format's event type (`is_terminal`, `is_failure`), never a string match at a call site
 
 ## Python pairs

@@ -1,13 +1,15 @@
 use serde_json::{Map, Value};
 
-/// Event names on the Responses stream, shared by the SSE and WebSocket transports. Only names
-/// LiteLLM branches on are variants; everything else rides in `Other` untouched.
+/// Every event name on https://developers.openai.com/api/reference/resources/responses/streaming-events
+/// as of 2026-10-11, plus `response.create` from the WebSocket mode. Names OpenAI adds later ride in
+/// `Other` untouched.
 #[derive(
     Clone,
     Debug,
     PartialEq,
     Eq,
     strum::AsRefStr,
+    strum::EnumIter,
     strum::EnumString,
     strum::Display,
     serde_with::DeserializeFromStr,
@@ -20,6 +22,8 @@ pub enum ResponsesEventType {
     ResponseCreate,
     #[strum(serialize = "response.created")]
     ResponseCreated,
+    #[strum(serialize = "response.queued")]
+    ResponseQueued,
     #[strum(serialize = "response.in_progress")]
     ResponseInProgress,
     #[strum(serialize = "response.completed")]
@@ -30,28 +34,78 @@ pub enum ResponsesEventType {
     ResponseIncomplete,
     #[strum(serialize = "error")]
     Error,
-    #[strum(serialize = "response.output_item.added")]
-    OutputItemAdded,
-    #[strum(serialize = "response.output_item.done")]
-    OutputItemDone,
+    #[strum(serialize = "response.audio.delta")]
+    AudioDelta,
+    #[strum(serialize = "response.audio.done")]
+    AudioDone,
+    #[strum(serialize = "response.audio.transcript.delta")]
+    AudioTranscriptDelta,
+    #[strum(serialize = "response.audio.transcript.done")]
+    AudioTranscriptDone,
+    #[strum(serialize = "response.code_interpreter_call.completed")]
+    CodeInterpreterCallCompleted,
+    #[strum(serialize = "response.code_interpreter_call.in_progress")]
+    CodeInterpreterCallInProgress,
+    #[strum(serialize = "response.code_interpreter_call.interpreting")]
+    CodeInterpreterCallInterpreting,
+    #[strum(serialize = "response.code_interpreter_call_code.delta")]
+    CodeInterpreterCallCodeDelta,
+    #[strum(serialize = "response.code_interpreter_call_code.done")]
+    CodeInterpreterCallCodeDone,
+    #[strum(serialize = "response.compaction.compacting")]
+    CompactionCompacting,
     #[strum(serialize = "response.content_part.added")]
     ContentPartAdded,
     #[strum(serialize = "response.content_part.done")]
     ContentPartDone,
-    #[strum(serialize = "response.output_text.delta")]
-    OutputTextDelta,
-    #[strum(serialize = "response.output_text.annotation.added")]
-    OutputTextAnnotationAdded,
-    #[strum(serialize = "response.output_text.done")]
-    OutputTextDone,
-    #[strum(serialize = "response.refusal.delta")]
-    RefusalDelta,
-    #[strum(serialize = "response.refusal.done")]
-    RefusalDone,
+    #[strum(serialize = "response.custom_tool_call_input.delta")]
+    CustomToolCallInputDelta,
+    #[strum(serialize = "response.custom_tool_call_input.done")]
+    CustomToolCallInputDone,
+    #[strum(serialize = "response.file_search_call.completed")]
+    FileSearchCallCompleted,
+    #[strum(serialize = "response.file_search_call.in_progress")]
+    FileSearchCallInProgress,
+    #[strum(serialize = "response.file_search_call.searching")]
+    FileSearchCallSearching,
     #[strum(serialize = "response.function_call_arguments.delta")]
     FunctionCallArgumentsDelta,
     #[strum(serialize = "response.function_call_arguments.done")]
     FunctionCallArgumentsDone,
+    #[strum(serialize = "response.image_generation_call.completed")]
+    ImageGenerationCallCompleted,
+    #[strum(serialize = "response.image_generation_call.generating")]
+    ImageGenerationCallGenerating,
+    #[strum(serialize = "response.image_generation_call.in_progress")]
+    ImageGenerationCallInProgress,
+    #[strum(serialize = "response.image_generation_call.partial_image")]
+    ImageGenerationCallPartialImage,
+    #[strum(serialize = "response.mcp_call.completed")]
+    McpCallCompleted,
+    #[strum(serialize = "response.mcp_call.failed")]
+    McpCallFailed,
+    #[strum(serialize = "response.mcp_call.in_progress")]
+    McpCallInProgress,
+    #[strum(serialize = "response.mcp_call_arguments.delta")]
+    McpCallArgumentsDelta,
+    #[strum(serialize = "response.mcp_call_arguments.done")]
+    McpCallArgumentsDone,
+    #[strum(serialize = "response.mcp_list_tools.completed")]
+    McpListToolsCompleted,
+    #[strum(serialize = "response.mcp_list_tools.failed")]
+    McpListToolsFailed,
+    #[strum(serialize = "response.mcp_list_tools.in_progress")]
+    McpListToolsInProgress,
+    #[strum(serialize = "response.output_item.added")]
+    OutputItemAdded,
+    #[strum(serialize = "response.output_item.done")]
+    OutputItemDone,
+    #[strum(serialize = "response.output_text.annotation.added")]
+    OutputTextAnnotationAdded,
+    #[strum(serialize = "response.output_text.delta")]
+    OutputTextDelta,
+    #[strum(serialize = "response.output_text.done")]
+    OutputTextDone,
     #[strum(serialize = "response.reasoning_summary_part.added")]
     ReasoningSummaryPartAdded,
     #[strum(serialize = "response.reasoning_summary_part.done")]
@@ -60,6 +114,30 @@ pub enum ResponsesEventType {
     ReasoningSummaryTextDelta,
     #[strum(serialize = "response.reasoning_summary_text.done")]
     ReasoningSummaryTextDone,
+    #[strum(serialize = "response.reasoning_text.delta")]
+    ReasoningTextDelta,
+    #[strum(serialize = "response.reasoning_text.done")]
+    ReasoningTextDone,
+    #[strum(serialize = "response.refusal.delta")]
+    RefusalDelta,
+    #[strum(serialize = "response.refusal.done")]
+    RefusalDone,
+    #[strum(serialize = "response.shell_call_command.added")]
+    ShellCallCommandAdded,
+    #[strum(serialize = "response.shell_call_command.delta")]
+    ShellCallCommandDelta,
+    #[strum(serialize = "response.shell_call_command.done")]
+    ShellCallCommandDone,
+    #[strum(serialize = "response.shell_call_output_content.delta")]
+    ShellCallOutputContentDelta,
+    #[strum(serialize = "response.shell_call_output_content.done")]
+    ShellCallOutputContentDone,
+    #[strum(serialize = "response.web_search_call.completed")]
+    WebSearchCallCompleted,
+    #[strum(serialize = "response.web_search_call.in_progress")]
+    WebSearchCallInProgress,
+    #[strum(serialize = "response.web_search_call.searching")]
+    WebSearchCallSearching,
     #[strum(default, transparent)]
     Other(String),
 }
@@ -113,53 +191,29 @@ impl ResponsesStreamEvent {
 mod tests {
     use rstest::rstest;
     use serde_json::{Value, json};
+    use strum::IntoEnumIterator;
 
     use super::*;
 
     #[rstest]
-    #[case::create("response.create", ResponsesEventType::ResponseCreate)]
-    #[case::created("response.created", ResponsesEventType::ResponseCreated)]
-    #[case::in_progress("response.in_progress", ResponsesEventType::ResponseInProgress)]
-    #[case::completed("response.completed", ResponsesEventType::ResponseCompleted)]
-    #[case::failed("response.failed", ResponsesEventType::ResponseFailed)]
-    #[case::incomplete("response.incomplete", ResponsesEventType::ResponseIncomplete)]
-    #[case::error("error", ResponsesEventType::Error)]
-    #[case::item_added("response.output_item.added", ResponsesEventType::OutputItemAdded)]
-    #[case::item_done("response.output_item.done", ResponsesEventType::OutputItemDone)]
-    #[case::part_added("response.content_part.added", ResponsesEventType::ContentPartAdded)]
-    #[case::part_done("response.content_part.done", ResponsesEventType::ContentPartDone)]
-    #[case::text("response.output_text.delta", ResponsesEventType::OutputTextDelta)]
-    #[case::annotation(
-        "response.output_text.annotation.added",
-        ResponsesEventType::OutputTextAnnotationAdded
-    )]
-    #[case::text_done("response.output_text.done", ResponsesEventType::OutputTextDone)]
-    #[case::refusal("response.refusal.delta", ResponsesEventType::RefusalDelta)]
-    #[case::refusal_done("response.refusal.done", ResponsesEventType::RefusalDone)]
-    #[case::tool(
-        "response.function_call_arguments.delta",
-        ResponsesEventType::FunctionCallArgumentsDelta
-    )]
-    #[case::tool_done(
-        "response.function_call_arguments.done",
-        ResponsesEventType::FunctionCallArgumentsDone
-    )]
-    #[case::summary_part(
-        "response.reasoning_summary_part.added",
-        ResponsesEventType::ReasoningSummaryPartAdded
-    )]
-    #[case::summary_part_done(
-        "response.reasoning_summary_part.done",
-        ResponsesEventType::ReasoningSummaryPartDone
-    )]
-    #[case::summary_text(
-        "response.reasoning_summary_text.delta",
-        ResponsesEventType::ReasoningSummaryTextDelta
-    )]
-    #[case::summary_text_done(
-        "response.reasoning_summary_text.done",
-        ResponsesEventType::ReasoningSummaryTextDone
-    )]
+    fn every_named_event_type_round_trips() {
+        let named: Vec<_> = ResponsesEventType::iter()
+            .filter(|event_type| !matches!(event_type, ResponsesEventType::Other(_)))
+            .collect();
+        assert!(named.len() > 50);
+        for event_type in named {
+            let wire = event_type.to_string();
+            assert_eq!(wire, event_type.as_ref());
+            assert_eq!(serde_json::to_value(&event_type).unwrap(), json!(wire));
+            assert_eq!(wire.parse::<ResponsesEventType>().unwrap(), event_type);
+            assert_eq!(
+                serde_json::from_value::<ResponsesEventType>(json!(wire)).unwrap(),
+                event_type
+            );
+        }
+    }
+
+    #[rstest]
     #[case::unknown("future.event", ResponsesEventType::Other("future.event".into()))]
     #[case::empty("", ResponsesEventType::Other(String::new()))]
     #[case::case_sensitive(
@@ -167,7 +221,10 @@ mod tests {
         ResponsesEventType::Other("Response.Completed".into())
     )]
     #[case::escaped("future\"\\\n", ResponsesEventType::Other("future\"\\\n".into()))]
-    fn event_types_round_trip(#[case] wire: &str, #[case] expected: ResponsesEventType) {
+    fn unknown_event_types_round_trip_through_other(
+        #[case] wire: &str,
+        #[case] expected: ResponsesEventType,
+    ) {
         assert_eq!(
             serde_json::from_value::<ResponsesEventType>(json!(wire)).unwrap(),
             expected
@@ -190,7 +247,7 @@ mod tests {
     #[case::delta(ResponsesEventType::OutputTextDelta, false, false)]
     #[case::item_done(ResponsesEventType::OutputItemDone, false, false)]
     #[case::unknown(ResponsesEventType::Other("response.future".into()), false, false)]
-    #[case::unknown_failed(ResponsesEventType::Other("response.mcp_call.failed".into()), false, false)]
+    #[case::tool_failed(ResponsesEventType::McpCallFailed, false, false)]
     fn terminal_and_failure_events_match_the_python_iterator(
         #[case] event_type: ResponsesEventType,
         #[case] terminal: bool,

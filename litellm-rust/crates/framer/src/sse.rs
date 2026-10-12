@@ -36,17 +36,9 @@ impl Decoder for SseCodec {
         Ok(None)
     }
 
-    /// Bytes left after the last terminated block are an event the stream ended inside of,
-    /// which is an error rather than something to drop.
+    /// An event the stream ended inside of is dropped, as the SSE spec requires.
     fn decode_eof(&mut self, pending: &mut BytesMut) -> Result<Option<SseEvent>, SseError> {
-        drained(self.decode(pending)?, pending)
-    }
-}
-
-fn drained<T>(item: Option<T>, pending: &BytesMut) -> Result<Option<T>, SseError> {
-    match item {
-        None if !pending.is_empty() => Err(SseError::Unterminated),
-        item => Ok(item),
+        self.decode(pending)
     }
 }
 
@@ -96,7 +88,7 @@ impl Decoder for SseBlockCodec {
     }
 
     fn decode_eof(&mut self, pending: &mut BytesMut) -> Result<Option<SseBlock>, SseError> {
-        drained(self.decode_block(pending, true)?, pending)
+        self.decode_block(pending, true)
     }
 }
 
@@ -306,16 +298,15 @@ mod tests {
     }
 
     #[rstest]
-    #[case::empty(b"", vec![], false)]
-    #[case::unterminated(b"data: partial\n", vec![], true)]
-    #[case::partial_tail(b"data: complete\n\ndata: partial\n", vec![&b"data: complete\n\n"[..]], true)]
-    #[case::multiple(b"data: first\n\ndata: second\n\n", vec![&b"data: first\n\n"[..], &b"data: second\n\n"[..]], false)]
-    #[case::trailing_comment(b"data: first\n\n: bye\n\n", vec![&b"data: first\n\n"[..]], false)]
+    #[case::empty(b"", vec![])]
+    #[case::unterminated(b"data: partial\n", vec![])]
+    #[case::partial_tail(b"data: complete\n\ndata: partial\n", vec![&b"data: complete\n\n"[..]])]
+    #[case::multiple(b"data: first\n\ndata: second\n\n", vec![&b"data: first\n\n"[..], &b"data: second\n\n"[..]])]
+    #[case::trailing_comment(b"data: first\n\n: bye\n\n", vec![&b"data: first\n\n"[..]])]
     #[tokio::test]
-    async fn blocks_dispatch_complete_events_then_fail_on_a_cut_tail(
+    async fn blocks_dispatch_complete_events_and_drop_a_cut_tail(
         #[case] wire: &[u8],
         #[case] expected: Vec<&[u8]>,
-        #[case] cut: bool,
     ) {
         let mut blocks = Box::pin(frames(
             stream::iter(pieces(wire, 1).into_iter().map(Ok::<_, std::io::Error>)),
@@ -323,11 +314,6 @@ mod tests {
         ));
         for expected in expected {
             assert_eq!(blocks.next().await.unwrap().unwrap().bytes, expected);
-        }
-        match blocks.next().await {
-            Some(Err(SseError::Unterminated)) => assert!(cut),
-            None => assert!(!cut),
-            other => panic!("unexpected item: {other:?}"),
         }
         assert!(blocks.next().await.is_none());
     }
@@ -347,11 +333,19 @@ mod tests {
     }
 
     #[rstest]
-    #[case::only_a_tail(b"data: partial\n")]
-    #[case::tail_after_an_event(b"data: complete\n\ndata: partial\n")]
-    #[case::no_terminator_at_all(b"data: partial")]
-    fn bulk_decode_rejects_a_stream_that_ends_inside_an_event(#[case] wire: &[u8]) {
-        assert!(matches!(decode_all(wire), Err(SseError::Unterminated)));
+    #[case::only_a_tail(b"data: partial\n", vec![])]
+    #[case::tail_after_an_event(b"data: complete\n\ndata: partial\n", vec!["complete"])]
+    #[case::no_terminator_at_all(b"data: partial", vec![])]
+    fn bulk_decode_drops_the_event_a_stream_ends_inside(
+        #[case] wire: &[u8],
+        #[case] expected: Vec<&str>,
+    ) {
+        let data: Vec<String> = decode_all(wire)
+            .unwrap()
+            .into_iter()
+            .map(|e| e.data)
+            .collect();
+        assert_eq!(data, expected);
     }
 
     #[rstest]

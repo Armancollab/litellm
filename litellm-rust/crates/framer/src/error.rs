@@ -5,8 +5,6 @@ pub enum SseError {
     Body(#[from] std::io::Error),
     #[error("SSE field is not UTF-8: {0}")]
     InvalidUtf8(#[from] std::str::Utf8Error),
-    #[error("SSE stream ended inside an event")]
-    Unterminated,
 }
 
 #[cfg(feature = "aws")]
