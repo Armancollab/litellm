@@ -5,7 +5,7 @@ use litellm_host::{
     call::{HostedMachine, hosted_call},
     protocol::Protocol,
 };
-use litellm_llms_types::formats::responses::ResponsesApiResponse;
+use litellm_llms_types::formats::responses::{ResponsesApiResponse, streaming::ResponsesEventType};
 
 use super::{
     Error, ResponsesRoute,
@@ -57,7 +57,14 @@ impl litellm_inference::caching::Cachable for Responses {
 }
 
 impl litellm_inference::caching::StreamCachable for Responses {
-    const TERMINAL_EVENT: &'static str = "response.completed";
+    fn stream_succeeded(wire: &[u8]) -> bool {
+        litellm_llms::base_llm::responses::streaming::decode(wire).is_ok_and(|events| {
+            events
+                .iter()
+                .any(|event| event.event_type == ResponsesEventType::ResponseCompleted)
+                && !events.iter().any(|event| event.event_type.is_failure())
+        })
+    }
 
     fn replay(data: bytes::Bytes) -> Option<litellm_host::call::OutputOf<Self>> {
         Some(litellm_host::call::CallOutput::Stream {

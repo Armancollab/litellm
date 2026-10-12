@@ -97,12 +97,11 @@ async fn dispatch_follows_the_data_buffer(#[case] wire: &[u8], #[case] expected:
 }
 
 #[rstest]
-#[case::unterminated_single(b"data: partial\n", vec![])]
-#[case::unterminated_tail_after_complete(b"data: complete\n\ndata: unfinished\n", vec![event(None, "complete")])]
 #[case::lone_cr_terminates_at_eof(b"data: x\r\r", vec![event(None, "x")])]
-#[case::lone_cr_line_then_eof(b"data: x\r", vec![])]
+#[case::trailing_blank_lines(b"data: x\n\n\n", vec![event(None, "x")])]
+#[case::trailing_comment(b"data: x\n\n: bye\n\n", vec![event(None, "x")])]
 #[tokio::test]
-async fn eof_dispatches_only_terminated_events(
+async fn eof_between_events_ends_the_stream_cleanly(
     #[case] wire: &[u8],
     #[case] expected: Vec<SseEvent>,
 ) {
@@ -110,6 +109,27 @@ async fn eof_dispatches_only_terminated_events(
         collect(vec![Bytes::copy_from_slice(wire)]).await.unwrap(),
         expected
     );
+}
+
+#[rstest]
+#[case::unterminated_single(b"data: partial\n", vec![])]
+#[case::unterminated_tail_after_complete(b"data: complete\n\ndata: unfinished\n", vec![event(None, "complete")])]
+#[case::lone_cr_line_then_eof(b"data: x\r", vec![])]
+#[case::partial_bom(b"\xEF\xBB", vec![])]
+#[tokio::test]
+async fn eof_inside_an_event_fails_after_the_terminated_events(
+    #[case] wire: &[u8],
+    #[case] expected: Vec<SseEvent>,
+) {
+    let mut events = Box::pin(frames(input(every(wire, 1)), SseCodec::default()));
+    for expected in expected {
+        assert_eq!(events.next().await.unwrap().unwrap(), expected);
+    }
+    assert!(matches!(
+        events.next().await,
+        Some(Err(SseError::Unterminated))
+    ));
+    assert!(events.next().await.is_none());
 }
 
 #[rstest]
