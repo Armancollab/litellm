@@ -1,6 +1,9 @@
 use bytes::Bytes;
 use futures_util::{StreamExt, stream::BoxStream};
-use litellm_framer::{frames, sse::SseCodec};
+use litellm_framer::{
+    frames,
+    sse::{SseCodec, decode_all},
+};
 use litellm_llms_types::formats::messages::streaming::MessagesStreamEvent;
 
 use crate::Error;
@@ -33,6 +36,20 @@ pub fn encode_anthropic_sse(event: &MessagesStreamEvent) -> Result<Bytes, Error>
             )
         })?;
     Ok(Bytes::from(format!("event: {name}\ndata: {data}\n\n")))
+}
+
+pub fn decode_anthropic_sse(wire: &[u8]) -> Result<Vec<MessagesStreamEvent>, Error> {
+    decode_all(wire)
+        .map_err(|error| {
+            Error::InvalidResponse(crate::ErrorDetail::failed("stream framing", error))
+        })?
+        .iter()
+        .map(|event| {
+            serde_json::from_str(&event.data).map_err(|error| {
+                Error::InvalidResponse(crate::ErrorDetail::invalid("Anthropic stream event", error))
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -138,5 +155,54 @@ mod tests {
                 json!({"type": "message_stop"})
             ))
         );
+    }
+
+    #[rstest::rstest]
+    fn complete_sse_decoding_matches_the_typed_events() {
+        let expected = events();
+        let wire: Vec<u8> = expected
+            .iter()
+            .map(encode_anthropic_sse)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .into_iter()
+            .flatten()
+            .collect();
+        assert_eq!(decode_anthropic_sse(&wire).unwrap(), expected);
+    }
+
+    #[rstest::rstest]
+    #[case::json(b"data: {\n\n")]
+    #[case::malformed_tool(b"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":3}}\n\n")]
+    #[case::utf8(b"data: \xff\n\n")]
+    fn complete_sse_decoding_rejects_malformed_events(#[case] wire: &[u8]) {
+        assert!(matches!(
+            decode_anthropic_sse(wire),
+            Err(Error::InvalidResponse(_))
+        ));
+    }
+
+    #[rstest::rstest]
+    fn complete_sse_decoding_keeps_tool_deltas_and_block_extensions() {
+        let wire = concat!(
+            "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t\",\"name\":\"lookup\",\"input\":{},\"future\":null}}\n\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"x\\\":\"}}\n\n",
+        );
+        let decoded = decode_anthropic_sse(wire.as_bytes()).unwrap();
+        let [
+            MessagesStreamEvent::ContentBlockStart { content_block, .. },
+            MessagesStreamEvent::ContentBlockDelta {
+                delta: MessagesContentBlockDelta::InputJsonDelta { partial_json },
+                ..
+            },
+        ] = decoded.as_slice()
+        else {
+            panic!("expected tool events");
+        };
+        assert_eq!(
+            content_block.extra.get("future"),
+            Some(&serde_json::Value::Null)
+        );
+        assert_eq!(partial_json, "{\"x\":");
     }
 }
