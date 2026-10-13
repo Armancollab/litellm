@@ -3,15 +3,31 @@ use crate::{
     lifecycle::{CallEvent, Timing},
 };
 
-pub trait HookRuntime {
-    type Context<'a>;
+mod adapter;
+mod chain;
+
+pub use adapter::{ChainStep, DynCallHooks, HookAdapter};
+pub use chain::{ChainRuntime, HookChain, HookGroupAdapter};
+
+pub type HookResume<R, H, T> = fn(
+    &mut H,
+    <R as HookRuntime>::Context<'_>,
+    Result<<R as HookRuntime>::Resumed, <R as HookRuntime>::Error>,
+) -> Result<HookStep<R, H, T>, <R as HookRuntime>::Error>;
+
+pub enum HookStep<R: HookRuntime, H, T> {
+    Await(R::Awaitable, HookResume<R, H, T>),
+    Ready(T),
+}
+
+pub trait HookRuntime: Sized {
+    type Context<'a>: Copy;
     type Arguments;
     type Response;
     type Chunk;
     type Error;
-    type Step<H, T>;
-
-    fn ready<H, T>(value: T) -> Self::Step<H, T>;
+    type Awaitable;
+    type Resumed;
 }
 
 pub type RuntimeCallEvent<'a, R> =
@@ -23,8 +39,8 @@ pub trait CallHooks<R: HookRuntime>: Sized {
         _runtime: R::Context<'_>,
         arguments: R::Arguments,
         _started_at: f64,
-    ) -> Result<R::Step<Self, R::Arguments>, R::Error> {
-        Ok(R::ready(arguments))
+    ) -> Result<HookStep<R, Self, R::Arguments>, R::Error> {
+        Ok(HookStep::Ready(arguments))
     }
 
     fn arguments_prepared(
@@ -40,8 +56,8 @@ pub trait CallHooks<R: HookRuntime>: Sized {
         _runtime: R::Context<'_>,
         wire: Box<WireRequest>,
         _context: &RequestContext,
-    ) -> Result<R::Step<Self, Box<WireRequest>>, R::Error> {
-        Ok(R::ready(wire))
+    ) -> Result<HookStep<R, Self, Box<WireRequest>>, R::Error> {
+        Ok(HookStep::Ready(wire))
     }
 
     fn transform_response(
@@ -49,16 +65,16 @@ pub trait CallHooks<R: HookRuntime>: Sized {
         _runtime: R::Context<'_>,
         response: R::Response,
         _timing: Timing,
-    ) -> Result<R::Step<Self, R::Response>, R::Error> {
-        Ok(R::ready(response))
+    ) -> Result<HookStep<R, Self, R::Response>, R::Error> {
+        Ok(HookStep::Ready(response))
     }
 
     fn on_event(
         &mut self,
         _runtime: R::Context<'_>,
         _event: RuntimeCallEvent<'_, R>,
-    ) -> Result<R::Step<Self, ()>, R::Error> {
-        Ok(R::ready(()))
+    ) -> Result<HookStep<R, Self, ()>, R::Error> {
+        Ok(HookStep::Ready(()))
     }
 
     fn on_stream_open(
